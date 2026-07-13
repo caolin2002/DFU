@@ -1,0 +1,117 @@
+{
+  "n_images": 1208,
+  "p_ge_grade2_stats": {
+    "min": 1.5545541828032583e-05,
+    "max": 0.5565915107727051,
+    "mean": 0.02101987600326538,
+    "std": 0.0439738929271698
+  },
+  "all_strategies": [
+    {
+      "strategy": "K-Means (Trad CV)",
+      "n_clusters": 3,
+      "silhouette_score": 0.2431,
+      "cluster_stats": {
+        "0": {
+          "size": 264,
+          "size_pct": 21.9,
+          "mean_class_probs": [
+            0.0068,
+            0.0023,
+            0.977,
+            0.0019,
+            0.0005,
+            0.0124,
+            0.0004
+          ],
+          "mean_thresh_probs": [
+            0.9932,
+            0.9923,
+            0.0153,
+            0.0134,
+            0.0128,
+            0.0004
+          ],
+          "mean_p_ge_grade2": 0.015259,
+          "std_p_ge_grade2": 0.005908,
+          "p_ge_grade2_range": [
+            0.000301,
+            0.042295
+          ],
+          "assigned_grade": "grade2"
+        },
+        "1": {
+          "size": 446,
+          "size_pct": 36.9,
+          "mean_class_probs": [
+            0.019,
+            0.0394,
+            0.9143,
+            0.0014,
+            0.0007,
+            0.0316,
+            0.0013
+          ],
+          "mean_thresh_probs": [
+            0.981,
+            0.946,
+            0.0317,
+            0.0316,
+            0.0328,
+            0.0013
+          ],
+          "mean_p_ge_grade2": 0.031699,
+          "std_p_ge_grade2": 0.059705,
+          "p_ge_grade2_range": [
+            1.8e-05,
+            0.556592
+          ],
+          "assigned_grade": "grade3"
+        },
+        "2": {
+          "size": 498,
+          "size_pct": 41.2,
+          "mean_class_probs": [
+            0.0227,
+            0.024,
+            0.9442,
+            0.0014,
+            0.0006,
+            0.0132,
+            0.0002
+          ],
+          "mean_thresh_probs": [
+            0.9773,
+            0.9587,
+            0.0145,
+            0.0134,
+            0.0134,
+            0.0002
+          ],
+          "mean_p_ge_grade2": 0.014509,
+          "std_p_ge_grade2": 0.036298,
+          "p_ge_grade2_range": [
+            1.6e-05,
+            0.508661
+          ],
+          "assigned_grade": "grade1"
+        }
+      },
+      "cluster_to_grade": {
+        "2": {
+          "wagner_grade": 2,
+          "wagner_label": "grade1"
+        },
+        "0": {
+          "wagner_grade": 3,
+          "wagner_label": "grade2"
+        },
+        "1": {
+          "wagner_grade": 4,
+          "wagner_label": "grade3"
+        }
+      }
+    }
+  ],
+  "best_strategy": "K-Means (Trad CV)"
+}

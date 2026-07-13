@@ -1,0 +1,63 @@
+# DFU Wagner 0-5 Grading — Training Configuration (v4)
+# Two-stage approach: binary screening → ordinal grading
+# 7-class schema (Wagner 0-5 full granularity)
+
+# Model
+model:
+  name: convnext_tiny              # convnext_tiny | resnet50 | efficientnet_b0
+  num_classes: 7                   # normal, grade0, grade1, grade2, grade3, grade4, grade5
+  pretrained: true
+  binary_head: true                # Include binary screening head
+
+# Data
+data:
+  data_dir: /root/dfu/data/processed
+  input_size: 224
+  classes:
+    - "Normal"
+    - "Grade 0 (Wagner 0, 204 train + DM augmented)"
+    - "Grade 1 (Wagner 1, 2.8K: cluster + 320 labeled)"
+    - "Grade 2 (Wagner 2, 1.5K: cluster + 333 labeled)"
+    - "Grade 3 (Wagner 3, 2.3K: cluster + 390 labeled)"
+    - "Grade 4 (Wagner 4-5, 331 labeled)"
+    - "Grade 5 (Wagner 4-5, reserved)"
+  binary: false                    # Set true for binary-only (benign vs ulcer)
+
+# Training hyperparameters
+training:
+  batch_size: 64
+  epochs: 80
+  learning_rate: 1.0e-3
+  weight_decay: 1.0e-4
+  label_smoothing: 0.1             # Only for standard CE (not CORN)
+
+  # Optimizer
+  optimizer: adamw
+
+  # Learning rate scheduler
+  lr_scheduler: cosine_warm_restart
+  lr_t_0: 15
+  lr_t_mult: 2
+  lr_min: 1.0e-6
+
+  # Early stopping
+  early_stopping_patience: 15
+
+  # Mixed precision
+  use_amp: true
+
+  # Loss
+  use_corn: true                   # CORN ordinal regression (recommended)
+  focal_gamma: 2.0                 # Focal loss gamma (0 = standard CE)
+  use_class_weights: true          # Inverse-frequency weights for imbalance
+
+# Logging & saving
+logging:
+  log_interval: 20
+  checkpoint_dir: /root/dfu/models/corn_v2
+  tensorboard_dir: /root/dfu/models/runs
+  csv_log: /root/dfu/models/corn_v2/training_log.csv
+
+# Seed
+seed: 42
+device: cuda

@@ -1,0 +1,100 @@
+{
+  "method": "K-Means clustering on ConvNeXt-Tiny backbone features",
+  "n_samples": 5634,
+  "n_clusters": 3,
+  "feature_dim": 768,
+  "kmeans_inertia": 3352976.5,
+  "cluster_to_grade": {
+    "0": {
+      "wagner_grade": 2,
+      "wagner_label": "grade1",
+      "rank": 0
+    },
+    "2": {
+      "wagner_grade": 3,
+      "wagner_label": "grade2",
+      "rank": 1
+    },
+    "1": {
+      "wagner_grade": 4,
+      "wagner_label": "grade3",
+      "rank": 2
+    }
+  },
+  "cluster_stats": {
+    "0": {
+      "size": 1546,
+      "size_pct": 27.4,
+      "pred_distribution": {
+        "2": 1495,
+        "1": 44,
+        "0": 6,
+        "5": 1
+      },
+      "median_pred": 2.0,
+      "mean_pred": 1.966,
+      "mean_probs": [
+        0.0116,
+        0.0431,
+        0.9359,
+        0.0012,
+        0.0006,
+        0.0089,
+        0.0
+      ],
+      "mean_feature_norm": 4.3589,
+      "std_feature_norm": 0.5364,
+      "mean_center_dist": 29.0277,
+      "assigned_grade": "grade1"
+    },
+    "1": {
+      "size": 1135,
+      "size_pct": 20.1,
+      "pred_distribution": {
+        "2": 1135
+      },
+      "median_pred": 2.0,
+      "mean_pred": 2.0,
+      "mean_probs": [
+        0.0048,
+        0.0012,
+        0.9794,
+        0.0019,
+        0.0005,
+        0.0122,
+        0.0004
+      ],
+      "mean_feature_norm": 2.9951,
+      "std_feature_norm": 0.0831,
+      "mean_center_dist": 7.966,
+      "assigned_grade": "grade3"
+    },
+    "2": {
+      "size": 2953,
+      "size_pct": 52.4,
+      "pred_distribution": {
+        "2": 2877,
+        "1": 56,
+        "0": 14,
+        "3": 3,
+        "5": 2,
+        "4": 1
+      },
+      "median_pred": 2.0,
+      "mean_pred": 1.975,
+      "mean_probs": [
+        0.0238,
+        0.0303,
+        0.9208,
+        0.0015,
+        0.0006,
+        0.0306,
+        0.0009
+      ],
+      "mean_feature_norm": 3.5379,
+      "std_feature_norm": 0.5692,
+      "mean_center_dist": 25.3903,
+      "assigned_grade": "grade2"
+    }
+  }
+}
