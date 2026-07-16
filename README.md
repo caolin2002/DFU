@@ -47,7 +47,7 @@ Accurate Wagner grading is critical for DFU treatment decisions — Grade 0 requ
 | grade2 | Wagner 2 | Deep ulcer |
 | grade3 | Wagner 3 | Deep infection |
 | grade4 | Wagner 4 | Localized gangrene |
-| grade5 | Wagner 5 | Whole-foot gangrene (reserved) |
+| grade5 | Wagner 5 | Whole-foot gangrene |
 
 ## Project Structure
 
@@ -57,7 +57,9 @@ DFU/
 ├── PLAN.md                  # Implementation plan & design decisions
 ├── src/
 │   ├── model.py             # ConvNeXt-Tiny + CORNHead + BinaryHead + losses
-│   ├── train.py             # Training loop with AMP
+│   ├── train.py             # Training loop with AMP + joint binary/ordinal
+│   ├── calibrate.py         # Temperature scaling calibration (LBFGS)
+│   ├── test_deployed_model.py # Independent deployment testing
 │   ├── inference.py         # Two-stage inference + Grad-CAM + HTML reports
 │   ├── eval_tta.py          # TTA evaluation script
 │   ├── tta.py               # 6-view test-time augmentation
@@ -117,7 +119,7 @@ python src/cross_validate.py --config config.yaml --fold 0
 # Single image inference with Grad-CAM
 python src/inference.py \
     --image path/to/foot_image.jpg \
-    --checkpoint models/corn_v2/best_model.pth \
+    --checkpoint models/corn_v4/best_model.pth \
     --output report.html
 ```
 
@@ -125,7 +127,7 @@ python src/inference.py \
 
 ```bash
 # Evaluate with 6-view test-time augmentation
-python src/eval_tta.py --checkpoint models/corn_v2/best_model.pth
+python src/eval_tta.py --checkpoint models/corn_v4/best_model.pth
 ```
 
 ### Data Acquisition
@@ -183,7 +185,7 @@ Input Image
 ## Key Design Decisions
 
 1. **CORN over standard CE** — ordinal regression preserves the natural ordering of Wagner grades (grade3 > grade2 > grade1), improving accuracy on adjacent classes
-2. **Frozen backbone** — ConvNeXt-Tiny features are generic enough for medical images; training only the head (1.7M params) prevents overfitting on ~5K training images
+2. **Frozen backbone** — ConvNeXt-Tiny features are generic enough for medical images; training only the head (~1.5K params) prevents overfitting on ~9K training groups
 3. **Patient-level splitting** — wounds from the same patient are grouped into the same fold, preventing data leakage from patient-specific features
 4. **Group-based sampling** — multiple augmentations of the same wound are treated as one group; each `__getitem__` samples one variant randomly
 5. **Two-stage inference** — binary screening (benign/ulcer) as first stage filters out healthy images before expensive ordinal grading
@@ -202,15 +204,35 @@ Five clustering strategies were compared for unlabeled data curation:
 
 ## Performance
 
-Results from 3-fold cross-validation (mean ± 95% CI, t-distribution):
+### corn_v4 — Independent Test Set (1,845 images, 7 classes)
 
-| Metric | Mean ± 95% CI |
+**Binary Screening (Stage 1):**
+
+| Metric | Value |
 |:---|:---|
-| Accuracy | Reported in `reports/` |
-| Macro F1 | Reported in `reports/` |
-| Quadratic Kappa | Reported in `reports/` |
+| Accuracy | 99.08% |
+| F1 (ulcer) | 99.36% |
 
-Full per-class F1 scores and confusion matrices are saved to `models/corn_v2/cv_results.csv`.
+**Ordinal Wagner Grading (Stage 2):**
+
+| Metric | Value |
+|:---|:---|
+| Accuracy | 56.69% |
+| Macro F1 | 42.19% |
+| Weighted F1 | 56.22% |
+| Kappa | 81.26% |
+
+| Class | Precision | Recall | F1 | Support |
+|:---|:--:|:--:|:--:|:--:|
+| normal | 93.38% | 90.58% | 91.96% | 467 |
+| grade0 | 15.05% | 25.45% | 18.92% | 55 |
+| grade1 | 66.67% | 26.77% | 38.20% | 523 |
+| grade2 | 41.07% | 91.19% | 56.63% | 295 |
+| grade3 | 61.49% | 39.31% | 47.96% | 463 |
+| grade4 (localized gangrene) | 12.17% | 48.28% | 19.44% | 29 |
+| grade5 (full-foot gangrene) | 17.39% | 30.77% | 22.22% | 13 |
+
+Full report: `models/corn_v4/deployment_test_test.json`
 
 ## Technical Documentation
 

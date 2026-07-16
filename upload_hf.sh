@@ -3,6 +3,11 @@
 # One-click HuggingFace upload script
 # Run after server reboot:  bash /root/dfu/upload_hf.sh
 # ============================================================
+# Prerequisites:
+#   - /root/.proxy/sing-box (binary)
+#   - /root/.proxy/config.json (VMess WS config)
+#   - HF token in ~/.cache/huggingface/token
+# ============================================================
 
 set -e
 
@@ -19,11 +24,12 @@ if [ "$HTTP_CODE" != "200" ]; then
 fi
 echo "Proxy OK (HTTP $HTTP_CODE)"
 
-echo "=== Step 3: Upload models/ (851MB) ==="
+echo "=== Step 3: Upload models/ ==="
 python3 -c "
 import os
 os.environ['http_proxy'] = 'http://127.0.0.1:7890'
 os.environ['https_proxy'] = 'http://127.0.0.1:7890'
+os.environ['HF_HUB_DISABLE_XET'] = '1'
 from huggingface_hub import HfApi
 api = HfApi()
 print('Uploading models/...')
@@ -31,11 +37,12 @@ api.upload_folder('/root/dfu/models', 'models', 'cl-666/dfu-project', repo_type=
 print('models/ Done!')
 "
 
-echo "=== Step 4: Upload data/ (2.4G) ==="
+echo "=== Step 4: Upload data/ ==="
 python3 -c "
 import os
 os.environ['http_proxy'] = 'http://127.0.0.1:7890'
 os.environ['https_proxy'] = 'http://127.0.0.1:7890'
+os.environ['HF_HUB_DISABLE_XET'] = '1'
 from huggingface_hub import HfApi
 api = HfApi()
 print('Uploading data/...')

@@ -19,8 +19,8 @@ data:
     - "Grade 1 (Wagner 1, 2.8K: cluster + 320 labeled)"
     - "Grade 2 (Wagner 2, 1.5K: cluster + 333 labeled)"
     - "Grade 3 (Wagner 3, 2.3K: cluster + 390 labeled)"
-    - "Grade 4 (Wagner 4-5, 331 labeled)"
-    - "Grade 5 (Wagner 4-5, reserved)"
+    - "Grade 4 (Wagner 4, localized gangrene, 232 train)"
+    - "Grade 5 (Wagner 5, full-foot gangrene, 99 train)"
   binary: false                    # Set true for binary-only (benign vs ulcer)
 
 # Training hyperparameters
@@ -50,13 +50,15 @@ training:
   use_corn: true                   # CORN ordinal regression (recommended)
   focal_gamma: 2.0                 # Focal loss gamma (0 = standard CE)
   use_class_weights: true          # Inverse-frequency weights for imbalance
+  joint_training: true             # Train binary + ordinal heads together
+  binary_loss_weight: 0.5          # Weight of binary loss in joint training
 
 # Logging & saving
 logging:
   log_interval: 20
-  checkpoint_dir: /root/dfu/models/corn_v2
+  checkpoint_dir: /root/dfu/models/corn_v4
   tensorboard_dir: /root/dfu/models/runs
-  csv_log: /root/dfu/models/corn_v2/training_log.csv
+  csv_log: /root/dfu/models/corn_v4/training_log.csv
 
 # Seed
 seed: 42

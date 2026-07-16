@@ -2,14 +2,14 @@
 """
 PyTorch Dataset for DFU Wagner 0-5 grading system.
 
-Label schema (7 classes — full Wagner 0-5 granularity):
+Label schema (7 classes — Wagner 0-5 full granularity):
   normal   = 0 — healthy foot/skin, no DFU pathology
   grade0   = 1 — Wagner 0, high-risk foot, callus, deformity, NO ulcer
   grade1   = 2 — Wagner 1, superficial ulcer (cluster + human-labeled)
   grade2   = 3 — Wagner 2, deep ulcer (cluster + human-labeled)
   grade3   = 4 — Wagner 3, deep infection (cluster + human-labeled)
-  grade4   = 5 — Wagner 4-5, localized gangrene (aug + human-labeled)
-  grade5   = 6 — Wagner 4-5, full-foot gangrene (reserved placeholder)
+  grade4   = 5 — Wagner 4, localized gangrene
+  grade5   = 6 — Wagner 5, full-foot gangrene
 
 Binary mode:
   benign (grade0 + normal) vs ulcer (grade1 + grade2 + grade3 + grade4 + grade5)
@@ -41,8 +41,8 @@ from torchvision import transforms
 #   grade1 = 2 — Wagner 1, superficial ulcer (cluster + human-labeled)
 #   grade2 = 3 — Wagner 2, deep ulcer (cluster + human-labeled)
 #   grade3 = 4 — Wagner 3, deep infection (cluster + human-labeled)
-#   grade4 = 5 — Wagner 4-5, localized gangrene (aug + human-labeled)
-#   grade5 = 6 — Wagner 4-5, full-foot gangrene (reserved placeholder)
+#   grade4 = 5 — Wagner 4, localized gangrene
+#   grade5 = 6 — Wagner 5, full-foot gangrene
 LABEL_TO_IDX = {
     "normal": 0,
     "grade0": 1,
@@ -61,8 +61,8 @@ LABEL_NAMES = {
     "grade1": "Wagner 1 (superficial, cluster + labeled)",
     "grade2": "Wagner 2 (deep ulcer, cluster + labeled)",
     "grade3": "Wagner 3 (deep infection, cluster + labeled)",
-    "grade4": "Wagner 4-5 (localized gangrene, aug + labeled)",
-    "grade5": "Wagner 4-5 (full-foot, reserved)",
+    "grade4": "Wagner 4 (localized gangrene)",
+    "grade5": "Wagner 5 (full-foot gangrene)",
 }
 
 # Binary mode mapping
@@ -185,8 +185,8 @@ class DFUDataset(Dataset):
     DFU Wagner grading dataset.
 
     Supports two modes:
-      binary=True  → 0=benign (grade0+normal), 1=ulcer (wound+gangrene)
-      binary=False → 0=grade0, 1=normal, 2=wound, 3=gangrene
+      binary=True  → 0=benign (grade0+normal), 1=ulcer (grade1-5)
+      binary=False → 0=normal, 1=grade0, 2=grade1, ..., 6=grade5
 
     Group-based sampling:
       Augmented variants of the same wound are grouped. Each __getitem__

@@ -3,8 +3,8 @@
 Model definitions for DFU Wagner 0-5 grading system.
 
 Architecture — Two-stage design:
-  Stage 1 (binary):    benign (normal + grade0) vs ulcer (wound + gangrene)
-  Stage 2 (ordinal):   4-class CORN — normal < grade0 < wound < gangrene
+  Stage 1 (binary):    benign (normal + grade0) vs ulcer (grade1-5)
+  Stage 2 (ordinal):   7-class CORN — Wagner 0-5 with separate grade4/grade5
 
 Supported backbones:
   - ResNet-50 (standard or CORN ordinal head)
@@ -12,7 +12,7 @@ Supported backbones:
 
 Key components:
   - CORNHead: Conditional Ordinal Regression for Neural networks
-    Enforces monotonic thresholds: P(normal) >= P(grade0) >= P(wound) >= P(gangrene)
+    Enforces monotonic thresholds: P(>=grade0) >= P(>=grade1) >= ... >= P(>=grade5)
   - BinaryHead: Standard binary classifier for ulcer screening
   - DFUModel: Combined backbone with both heads for two-stage inference
 """
@@ -31,11 +31,26 @@ class CORNHead(nn.Module):
     """
     CORN (Conditional Ordinal Regression for Neural networks) head.
 
-    For K classes, learns K-1 binary classifiers with monotonic biases:
-      "Is severity >= grade0?" → ">= grade1?" → ">= grade2?" → ... → ">= grade5?"
+    For K classes, learns K-1 binary classifiers with a SHARED weight vector
+    and monotonically decreasing biases:
 
-    Bias constraint: bias[0] <= bias[1] <= ... <= bias[K-2] via softplus chaining.
-    This enforces: P(>=grade0) >= P(>=grade1) >= ... >= P(>=grade5)
+      logit_k = w · x + b_k    for k = 0 .. K-2
+
+    Task k answers: "Is severity >= class k+1?"
+      k=0 → P(>=grade0), k=1 → P(>=grade1), ..., k=5 → P(>=grade5)
+
+    Since ">= grade0" is a superset of ">= grade1", we need:
+      P(>=grade0) >= P(>=grade1) >= ... >= P(>=grade5)
+
+    Because sigmoid is monotone increasing, this requires:
+      b_0 >= b_1 >= ... >= b_{K-2}    (biases non-increasing)
+
+    Bias constraint enforced via:
+      b_0 = base_bias
+      b_k = b_{k-1} - softplus(delta_{k-1})   →  b_0 >= b_1 >= ... >= b_{K-2}
+
+    This is the correct CORN formulation (Shi et al., 2020).  The previous
+    version used independent weight vectors per task, which breaks monotonicity.
     """
 
     def __init__(self, in_features: int, num_classes: int = 7):
@@ -43,28 +58,39 @@ class CORNHead(nn.Module):
         self.num_classes = num_classes
         self.num_tasks = num_classes - 1  # 7 classes → 6 binary tasks
 
-        # Shared weight matrix: [in_features] → [num_tasks] logits
-        self.linear = nn.Linear(in_features, self.num_tasks)
+        # Shared weight — all K-1 tasks use the SAME weight vector.
+        # This is the key CORN constraint: only biases differ across tasks.
+        self.linear = nn.Linear(in_features, 1)
 
-        # Non-decreasing bias chain:
-        #   bias[0] = base_bias
-        #   bias[k] = bias[k-1] + softplus(delta[k-1])
+        # Non-increasing bias chain:
+        #   b_0 = base_bias
+        #   b_k = b_{k-1} - softplus(delta_{k-1})   →  b_0 >= b_1 >= ... >= b_{K-2}
         self.base_bias = nn.Parameter(torch.zeros(1))
         self.bias_deltas = nn.Parameter(torch.zeros(self.num_tasks - 1))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        logits = self.linear(x)  # [B, K-1]
+        """
+        Returns [B, K-1] logits.
+        logit_k = (w · x) + b_k    where b_k are monotonically decreasing.
+        Thus sigmoid(logit_k) is also decreasing with k — correct ordering.
+        """
+        shared = self.linear(x)  # [B, 1] — same score for all tasks
 
-        # Build non-decreasing biases
+        # Build non-increasing biases: b_0 >= b_1 >= ... >= b_{K-2}
         biases = [self.base_bias]
         for delta in self.bias_deltas:
-            biases.append(biases[-1] + F.softplus(delta))
+            biases.append(biases[-1] - F.softplus(delta))
         bias = torch.cat(biases)  # [K-1]
 
-        return logits + bias
+        return shared + bias  # [B, K-1] via broadcasting: [B,1] + [K-1]
 
     def predict(self, logits: torch.Tensor) -> torch.Tensor:
-        """Sum of passed thresholds = predicted class index."""
+        """
+        Sum of passed thresholds = predicted class index.
+
+        Because monotonicity is guaranteed by shared weights, the threshold
+        pattern is always valid: [1,1,...,1,0,0,...,0].
+        """
         probs = torch.sigmoid(logits)
         preds = probs.round().sum(dim=1).long()
         return preds.clamp(0, self.num_classes - 1)
@@ -72,12 +98,17 @@ class CORNHead(nn.Module):
     def predict_proba(self, logits: torch.Tensor) -> torch.Tensor:
         """
         Convert threshold logits to per-class probabilities.
-        P(class 0) = 1 - P(>=1)
-        P(class 1) = P(>=1) - P(>=2)
-        P(class 2) = P(>=2) - P(>=3)
-        P(class 3) = P(>=3)
+
+        P(class 0)   = 1 - P(>=grade0)
+        P(class k)   = P(>=grade_{k-1}) - P(>=grade_k)    for 1 <= k <= K-2
+        P(class K-1) = P(>=grade_{K-2})
+
+        With shared weights + monotonic biases, the conditional probabilities
+        are guaranteed non-negative and sum to exactly 1 (telescoping sum).
+        No clamping needed.
         """
-        probs = torch.sigmoid(logits)  # [B, K-1]
+        probs = torch.sigmoid(logits)  # [B, K-1], monotonic decreasing along dim 1
+
         class_probs = []
         for i in range(self.num_classes):
             if i == 0:
@@ -86,7 +117,16 @@ class CORNHead(nn.Module):
                 class_probs.append(probs[:, -1])
             else:
                 class_probs.append(probs[:, i - 1] - probs[:, i])
-        return torch.stack(class_probs, dim=1).clamp(0, 1)
+
+        result = torch.stack(class_probs, dim=1)  # [B, K]
+
+        # Safety: softmax-normalize if numerical issues produce sum != 1
+        # (should not happen with correct monotonicity, but guards against fp32 drift)
+        row_sums = result.sum(dim=1, keepdim=True)
+        if not torch.allclose(row_sums, torch.ones_like(row_sums), atol=1e-5):
+            result = F.softmax(result, dim=1)
+
+        return result
 
 
 # ===========================================================================

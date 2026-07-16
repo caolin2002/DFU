@@ -1,8 +1,8 @@
 # DFU Wagner 0-5 分级系统 — 全套技术架构
 
 > **项目路径**: `/root/dfu`
-> **模型版本**: corn_v2 / ConvNeXt-Tiny
-> **更新日期**: 2026-07-13
+> **模型版本**: corn_v4 / ConvNeXt-Tiny
+> **更新日期**: 2026-07-16
 
 ---
 
@@ -59,7 +59,7 @@
 | 3 | grade2 | Wagner 2 深部溃疡 |
 | 4 | grade3 | Wagner 3 深部感染 |
 | 5 | grade4 | Wagner 4 局限性坏疽 |
-| 6 | grade5 | Wagner 5 全足坏疽（预留） |
+| 6 | grade5 | Wagner 5 全足坏疽 |
 
 **为什么用 7 类而非简单二分类？** 临床治疗决策取决于严重度等级——Wagner 0 只需随访，Wagner 3 需要急诊住院。二分类会丢失这个关键信息。
 
@@ -115,10 +115,10 @@ weights[i] = total / (n * count)
 ```
 稀有类别增广策略：
 
-grade0（高危足）:  223 张 → ×8 变体/张  → ~2,000 张  (目标 ≥500)
-grade4（坏疽）:      1 张 → ×199 变体/张  →    200 张  (极端扩增)
+grade0（高危足）:  342 张 → ×4-8 变体/张  → ~1,476 组  (目标 ≥500)
+grade4（坏疽）:    原始 2 张, R3 增广 + v4 拆分 → grade4 232 组 + grade5 99 组
 normal/grade1:    充足, 不做离线增广
-grade2/3/5:       空占位, 不做增广
+grade2/3:         空占位 → 后通过无监督聚类填充（见第三章）
 ```
 
 **关键原则**：只对 `train/` 做增广，`val/` 和 `test/` 完全不动 → 杜绝数据泄漏。
@@ -370,7 +370,7 @@ wound_unlabeled/         → grade1 (低置信度)
 
 - ConvNeXt 借鉴了 Vision Transformer 的设计哲学（大 kernel 7×7、LayerNorm 替代 BatchNorm、GELU 激活），但保留了 CNN 的效率和局部归纳偏置
 - 224×224 输入时，最后一个空间特征图是 7×7（与 ResNet 相同），适合中等大小的足部病变
-- 冻结全部骨干网络后仅训练头部 → **仅 5,389 可训练参数**，极大降低过拟合风险
+- 冻结全部骨干网络后仅训练头部 → **仅 ~1,544 可训练参数**，极大降低过拟合风险
 
 ### 4.2 冻结策略
 
@@ -868,22 +868,26 @@ def predict_image(...):
 
 | 文件 | 行数 | 职责 |
 |:--|:--|:--|
-| `src/dataset.py` | 285 | 数据集加载、增强、分组采样、类别权重 |
-| `src/model.py` | 374 | ConvNeXt-Tiny + CORNHead + BinaryHead + DFUModel + 损失函数 |
-| `src/train.py` | 424 | 单次训练（train/val/test）、AMP、早停、TensorBoard |
-| `src/cross_validate.py` | 453 | 3-Fold 患者级交叉验证、统计汇总（均值 ± 95% CI） |
-| `src/inference.py` | 542 | 两阶段推理 CLI、TTA、Grad-CAM、报告触发 |
-| `src/tta.py` | 161 | TTA 多视角增强（6 种变换）、logit 平均 |
-| `src/gradcam.py` | 254 | Grad-CAM 热力图生成（autograd.grad 方式） |
-| `src/report.py` | 473 | 自包含 HTML 中文临床报告（base64 内嵌、可打印） |
+| `src/dataset.py` | 284 | 数据集加载、增强、分组采样、类别权重 |
+| `src/model.py` | 413 | ConvNeXt-Tiny + CORNHead + BinaryHead + DFUModel + 损失函数 |
+| `src/train.py` | 557 | 单次训练（train/val/test）、AMP、早停、联合训练（binary+ordinal） |
+| `src/calibrate.py` | 338 | 温度缩放校准（Temperature Scaling）、LBFGS 优化 |
+| `src/test_deployed_model.py` | 493 | 部署前独立测试评估、七分类+二分类完整指标输出 |
+| `src/cross_validate.py` | 452 | 3-Fold 患者级交叉验证、统计汇总（均值 ± 95% CI） |
+| `src/inference.py` | 541 | 两阶段推理 CLI、TTA、Grad-CAM、报告触发 |
+| `src/tta.py` | 160 | TTA 多视角增强（6 种变换）、logit 平均 |
+| `src/gradcam.py` | 253 | Grad-CAM 热力图生成（autograd.grad 方式） |
+| `src/report.py` | 472 | 自包含 HTML 中文临床报告（base64 内嵌、可打印） |
 | `src/cluster_split.py` | 689 | 无监督聚类：HSV/GLCM/深度特征 + 5 策略对比 → 拆分 grade1 为 1/2/3 |
 | `src/labeling/r2_labeling.py` | 505 | 规则基自动标注管线：28K+ 图片 → 7 类标签 + 70/15/15 分层切分 |
-| `src/augmentation/r3_augment.py` | 235 | 离线数据增广：三级管线（轻/中/重）→ 稀有类别定向扩增 |
-| `src/download/download_all.py` | — | 多源数据采集编排器：Kaggle + Mendeley + HuggingFace |
-| `src/download/download_gangrene.py` | — | Open-i NIH + Wikimedia 坏疽/高危足专项下载 |
-| `src/download/extract_new_data.py` | — | 本地数据提取 + MD5 去重 + 关键词分类 |
-| `src/eval_tta.py` | — | TTA vs 标准推理对比评估 |
-| `config.yaml` | 64 | 全局配置文件（模型/数据/训练/日志参数） |
+| `src/augmentation/r3_augment.py` | 234 | 离线数据增广：三级管线（轻/中/重）→ 稀有类别定向扩增 |
+| `src/download/download_all.py` | 543 | 多源数据采集编排器：Kaggle + Mendeley + HuggingFace |
+| `src/download/download_gangrene.py` | 315 | Open-i NIH + Wikimedia 坏疽/高危足专项下载 |
+| `src/download/download_kaggle.py` | 237 | Kaggle DFU 数据集下载 |
+| `src/download/download_mendeley.py` | 239 | Mendeley 数据集下载（Cloudscraper） |
+| `src/download/extract_new_data.py` | 238 | 本地数据提取 + MD5 去重 + 关键词分类 |
+| `src/eval_tta.py` | 196 | TTA vs 标准推理对比评估 |
+| `config.yaml` | 66 | 全局配置文件（模型/数据/训练/日志参数） |
 
 ---
 
@@ -891,29 +895,36 @@ def predict_image(...):
 
 | 指标 | 值 | 含义 |
 |:--|:--|:--|
-| **可训练参数** | 5,389 | 仅 CORN head + binary head，冻结整个骨干 |
+| **可训练参数** | ~1,544 | 仅 CORN head + binary head，冻结整个骨干 |
 | **总参数量** | ~28M | ConvNeXt-Tiny 骨干 |
 | **单次推理时间** | ~25ms (GPU) | 不含 TTA |
 | **TTA 推理时间** | ~100ms (GPU) | 4 视角 |
 | **Grad-CAM 生成** | ~30ms (GPU) | autograd.grad |
 | **报告生成** | ~200ms | 含图片编码 |
 
-### 3-Fold 交叉验证结果
+### corn_v4 独立测试集结果
 
-| 指标 | 均值 ± 95% CI |
+| 指标 | 值 |
 |:--|:--|
-| **Accuracy（准确率）** | **70.57%** ± 4.31% |
-| **Macro F1（宏平均 F1）** | **68.41%** ± 4.28% |
-| **Kappa（二次加权）** | **0.854** ± 0.025 |
+| **二分类 Accuracy（良/恶性）** | **99.08%** |
+| **二分类 F1** | **99.36%** |
+| **Ordinal Accuracy（7 类）** | **56.69%** |
+| **Ordinal Macro F1** | **42.19%** |
+| **Ordinal Weighted F1** | **56.22%** |
+| **Kappa（线性加权）** | **81.26%** |
+| **温度校准参数 T** | 0.8416 |
 
-| Wagner 分级 | F1 ± 95% CI | 评价 |
-|:--|:--|:--|
-| Normal（正常） | 97.43% ± 0.82% | 🟢 极好 |
-| Grade 0（有风险） | 77.09% ± 3.48% | 🟢 良好 |
-| Grade 1（浅表） | 59.40% ± 6.62% | 🟡 中等 |
-| Grade 2（深部） | 60.30% ± 3.57% | 🟡 中等 |
-| Grade 3（感染） | 69.64% ± 6.66% | 🟡 中等 |
-| Grade 4（坏疽） | 46.58% ± 5.66% | 🔴 偏低 |
+| Wagner 分级 | Precision | Recall | F1 | Support | 评价 |
+|:--|:--:|:--:|:--:|:--:|:--|
+| Normal（正常） | 93.38% | 90.58% | **91.96%** | 467 | 🟢 极好 |
+| Grade 0（高危足） | 15.05% | 25.45% | 18.92% | 55 | 🔴 临床固有限制 |
+| Grade 1（浅表溃疡） | 66.67% | 26.77% | 38.20% | 523 | 🟡 偏中等 |
+| Grade 2（深部溃疡） | 41.07% | 91.19% | **56.63%** | 295 | 🟡 偏中等 |
+| Grade 3（深部感染） | 61.49% | 39.31% | 47.96% | 463 | 🟡 偏中等 |
+| Grade 4（局限坏疽） | 12.17% | 48.28% | 19.44% | 29 | 🔴 样本少 |
+| Grade 5（全足坏疽） | 17.39% | 30.77% | **22.22%** | 13 | 🔴 样本极少 |
+
+> **注**：v4 中将原 Wagner 4-5 联合池的 30% 图片随机分配至 grade5，使 grade5 从空占位变为有 13 个测试样本的真实类别。Grade 0↔Normal 混淆（51% grade0→normal）是临床固有限制——高危足外观接近健康足。Grade 4↔5 混淆（~35%）是合理相邻类混淆。
 
 ---
 
@@ -922,7 +933,7 @@ def predict_image(...):
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                                                             │
-│   "用最小的可训练参数（5K）撬动最强的预训练表征（28M）"        │
+│   "用最小的可训练参数（~1.5K）撬动最强的预训练表征（28M）"        │
 │                                                             │
 │   配合 CORN 有序回归保证预测的临床合理性                       │
 │   （不会出现 normal > grade3 这种矛盾输出）                    │
