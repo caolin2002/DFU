@@ -1,0 +1,62 @@
+# DFU Wagner 0-5 Grading — Full Fine-tuning Configuration
+# 解冻 ConvNeXt-Tiny 全部参数，差异化学习率微调 20 epochs
+# 从 v4 best_model 热启动
+
+# Model
+model:
+  name: convnext_tiny              # convnext_tiny | resnet50 | efficientnet_b0
+  num_classes: 7                   # normal, grade0, grade1, grade2, grade3, grade4, grade5
+  pretrained: true
+  binary_head: true                # Include binary screening head
+  freeze_backbone: false           # ← 核心变更：解冻全部 backbone 参数
+
+# Data
+data:
+  data_dir: /root/dfu/data/processed
+  input_size: 224
+  binary: false                    # Set true for binary-only (benign vs ulcer)
+
+# Training hyperparameters
+training:
+  batch_size: 64
+  epochs: 20                       # ← 缩短：全参数微调收敛更快
+  learning_rate: 1.0e-4           # ← Head 学习率（比冻结时降低 10x）
+  learning_rate_backbone: 1.0e-5 # ← 新增：Backbone 小学习率
+  weight_decay: 1.0e-4            # Head weight decay
+  weight_decay_backbone: 5.0e-5   # ← 新增：Backbone 更小的正则化
+
+  # Optimizer
+  optimizer: adamw
+
+  # Learning rate scheduler
+  lr_scheduler: cosine_warm_restart
+  lr_t_0: 10                       # ← 适配 20 epoch 周期
+  lr_t_mult: 2
+  lr_min: 1.0e-6
+
+  # Early stopping
+  early_stopping_patience: 8       # ← 缩短：适配更短训练
+
+  # Mixed precision
+  use_amp: true
+
+  # Loss
+  use_corn: true                   # CORN ordinal regression (recommended)
+  focal_gamma: 2.0                 # Focal loss gamma (0 = standard CE)
+  use_class_weights: true          # Inverse-frequency weights for imbalance
+  joint_training: true             # Train binary + ordinal heads together
+  binary_loss_weight: 0.5          # Weight of binary loss in joint training
+
+  # Hot-start from v4 checkpoint
+  resume_checkpoint: /root/dfu/models/corn_v4/best_model.pth
+
+# Logging & saving
+logging:
+  log_interval: 20
+  checkpoint_dir: /root/dfu/models/corn_v4_finetune    # 独立目录，不覆盖 v4
+  tensorboard_dir: /root/dfu/models/runs_finetune      # 独立 TensorBoard
+  csv_log: /root/dfu/models/corn_v4_finetune/training_log.csv
+
+# Seed
+seed: 42
+device: cuda
